@@ -9,8 +9,12 @@ else:
     
 print 'File Name: ',openF
 p1=PPGWave.PPGWave(openF)
+p1.PlotPPGWave()
+p1.PlotPPGWaveFiltered()
+p1.PlotCP()
+p1.PlotPPGWaveSeg()
+#p1.PlotPPGWaveSeg
+
 wf=PPGSeg.PPGSeg(p1)
-p1.Spectrum()
-wf.PlotPPG()
-wf.PlotWaveForm()
+wf.PlotPulse()
 wf.PrintAllParameters()
