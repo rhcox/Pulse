@@ -49,6 +49,26 @@ class PPGSeg(object):
         self.AverageWaveForm=self.ppg.getAverageWF()
         self.PulseWaveSystolicPeakPos=int(self.AverageWaveForm[2][0])
         self.PulseWaveEndPos=int(self.AverageWaveForm[2][1])
+        firstD=PPGfunc.derivative(self.AverageWaveForm[0],self.AverageWaveForm[1])
+        secondD=PPGfunc.derivative(self.AverageWaveForm[0],firstD)
+
+
+
+        x1 = self.AverageWaveForm[0]
+        y1 = self.AverageWaveForm[1]
+        plt.plot(x1, y1,label = "pulse", color= "red")
+        x2 = self.AverageWaveForm[0]
+        y2 = firstD*10
+        plt.plot(x2, y2,label = "First Derivative", color= "blue")
+        x2 = self.AverageWaveForm[0]
+        y2 = secondD*100
+        plt.plot(x2, y2,label = "Second Derivative", color= "green")
+        plt.xlabel('Time [ms]')
+        plt.ylabel('Pulse Waveform [Arb. Units]')
+        plt.legend(loc='upper right')
+        plt.title('Pulse Derivatives')
+        plt.show()
+
 
         self.HalfHeight=0.5*self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos]
         #print 'Half Height= ',self.HalfHeight
@@ -71,7 +91,7 @@ class PPGSeg(object):
 
 
 
-        Inflections=PPGfunc.FindNotch(self.AverageWaveForm[0],self.AverageWaveForm[1],self.PulseWaveSystolicPeakPos,self.HalfHeightHiPos)
+        Inflections=PPGfunc.FindNotch(self.AverageWaveForm[0],self.AverageWaveForm[1],self.PulseWaveSystolicPeakPos,self.HalfHeightHiPos,firstD,secondD)
         if(len(Inflections)>1):
             self.DiastolicPeakPos=Inflections.pop()
             self.DicroticNotchPos=Inflections.pop()
@@ -171,15 +191,15 @@ class PPGSeg(object):
         plt.arrow(self.DicroticNotchTime, start, 0, distance, width=0.05,length_includes_head=True)
  #       plt.text(start,self.PulseWaveAmplitude , text, ha='center', va='top')
         text='Pulse Area 1= '+ str(int(self.PulseArea1))
-        plt.text(self.DicroticNotchTime/2.0,self.DicroticNotchValue/2.0 , text, ha='center', va='top')
+        plt.text(self.DicroticNotchTime/1.5,self.DicroticNotchValue/3.0 , text, ha='center', va='top')
         text='Pulse Area 2= '+ str(int(self.PulseArea2))
-        plt.text(self.DicroticNotchTime/3.0+self.DicroticNotchTime,self.DicroticNotchValue/2.0 , text, ha='center', va='top')
+        plt.text(self.DicroticNotchTime/3.0+self.DicroticNotchTime,self.DicroticNotchValue/3.0 , text, ha='center', va='top')
 
         text='Reflection Index= '+ str(int(self.RelectionIndex))+'%'
-        plt.text(self.DicroticNotchTime/3.0+self.DicroticNotchTime,self.PulseWaveAmplitude*3.0/4.0 , text, ha='center', va='top')
+        plt.text(self.DicroticNotchTime/2+self.DicroticNotchTime,self.PulseWaveAmplitude*3.0/4.0 , text, ha='center', va='top')
 
         text='IPA= '+str(round(self.InflectionPointAreaRatio,2))
-        plt.text(self.DicroticNotchTime/3.0+self.DicroticNotchTime,self.PulseWaveAmplitude*7.0/8.0 , text, ha='center', va='top')
+        plt.text(self.DicroticNotchTime/2.0+self.DicroticNotchTime,self.PulseWaveAmplitude*7.0/8.0 , text, ha='center', va='top')
 
 
         plt.title('Annoted Averge Wave Form')

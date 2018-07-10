@@ -1,6 +1,5 @@
 import time
 import math
-from scipy.signal import find_peaks_cwt
 import numpy as np
 #from pypeaks import Data, Intervals
 import csv
@@ -13,6 +12,8 @@ from scipy import fft, arange
 import sys
 import PPGfunc
 from scipy import fftpack
+from scipy import signal
+#from scipy.signal import butter, sosfilt, sosfreqz
 
 class PPGWave(object):
     def ISO2mSec(self, rData):
@@ -105,6 +106,9 @@ class PPGWave(object):
         self.IndividualWFaverage=[]
         self.AverageWave=np.zeros((3,self.length))
         self.AverageWF()
+
+        self.troughThesh=0
+        self.peakThesh=0
         
 
         
@@ -125,19 +129,19 @@ class PPGWave(object):
     
     def getMaxValue(self):
         self.maxValue=PPGfunc.getMax(self.Data)
-        return self.maxTime
+        return self.maxValue
 
     def getMinValue(self):
         self.minValue=PPGfunc.getMin(self.Data)
-        return self.minTime
+        return self.minValue
 
     def getMaxFiltered(self):
         self.maxFiltered=PPGfunc.getMax(self.filtered_sig)
-        return self.maxTime
+        return self.maxFiltered
 
     def getMinFiltered(self):
         self.minFiltered=PPGfunc.getMin(self.filtered_sig)
-        return self.minTime
+        return self.minFiltered
 
     def getWF(self):
         outData[0]=self.Time
@@ -192,14 +196,42 @@ class PPGWave(object):
         
         self.filtered_fft = self.dataFFT.copy()
         self.filtered_fft[np.abs(frq) > 5] = 0
-        self.filtered_fft[np.abs(frq) < 1] = 0
+        self.filtered_fft[np.abs(frq) < 0.5] = 0
         self.filtered_sig = abs(fftpack.ifft(self.filtered_fft))
 
         return self.filtered_sig
 
+
+    def fileteredWave(self):
+        n = len(self.Data)/100
+        if n<5:
+            n=5
+        n=5
+        print ('n=',n)
+        lowcut=0.5
+        print ('lowcut=',lowcut)
+        highcut=5
+        print ('highcut=',highcut)
+        fs=60
+        print ('fs=',fs)
+        b,a=PPGfunc.butter_bandpass(lowcut, highcut, fs, n)
+        print ('Butter')
+        self.filtered_sig=PPGfunc.butter_bandpass_filter(self.Data,b,a)
+        print ('Filter')
+        #self.PlotPPGWave()
+        #self.PlotPPGWaveFiltered()
+        min=self.filtered_sig[0]
+        for i in self.filtered_sig:
+            if i<min:
+                min=i
+        self.filtered_sig=self.filtered_sig-min
+        print self.filtered_sig[10]
+        self.PlotPPGWaveBoth()
+
             
     def getWFderivative(self):
         self.Spectrum()
+        self.fileteredWave()
         for k in range(0,self.length-1):
             self.derivative[k]=PPGfunc.getSlope(self.Time[k],self.Time[k+1],self.filtered_sig[k],self.filtered_sig[k+1])
         self.derivative[self.length-1]=PPGfunc.getSlope(self.Time[self.length-2],self.Time[self.length-1],self.filtered_sig[self.length-2],self.filtered_sig[self.length-1])
@@ -258,62 +290,84 @@ class PPGWave(object):
         plt.ylim([-5, self.maxFiltered])
         plt.show()
 
+
     def isTrough(self,pos,name,peak,trough):
         if name=="Trough":
-            if (self.filtered_sig[pos]-self.minFiltered)<0.5*(self.maxFiltered-self.minFiltered):
-                if peak>0:
-                    if (self.Time[pos]-self.Time[ peak])>200:
-                        return True
+            if self.filtered_sig[pos]<self.troughThesh:
                 return True
+        #    if (self.filtered_sig[pos]-self.minFiltered)<0.5*(self.maxFiltered-self.minFiltered):
+        #        if peak>0:
+        #            if (self.Time[pos]-self.Time[ peak])>200:
+        #                return True
+        #        return True
         return False
         
     def isPeak(self,pos,name,peak,trough):
         if name=="Peak":
-            if (self.filtered_sig[pos]-self.minFiltered)>0.60*(self.maxFiltered-self.minFiltered):
-                if peak>0:
-                    if (self.Time[pos]-self.Time[ peak])>200:
-                        return True
-                else:
-                    return True
+            if self.filtered_sig[pos]>self.peakThesh:
+                print 'Signal= ',self.filtered_sig[pos], 'Peak Threshhold=',self.peakThesh
+                return True
+#            if (self.filtered_sig[pos]-self.minFiltered)>0.60*(self.maxFiltered-self.minFiltered):
+#                if peak>0:
+#                    if (self.Time[pos]-self.Time[ peak])>200:
+#                        return True
+#                else:
+#                    return True
         return False
         
     def findPeaksTroughs(self):
-        
         k=0
         peak=-1
         trough=-1
         foundPeak=False
         FoundinitTrough=False
         initTrough=-1
+        count=0
         #self.PlotPPGWave()
+        self.troughThesh=self.minFiltered+(self.maxFiltered-self.minFiltered)*.25
+        self.peakThesh=self.maxFiltered-(self.maxFiltered-self.minFiltered)*.25
         for k in self.CriticalPoints:
+            print 'Count=',count
             #print 'Critical Point=',k
             pos=k[0]
             name=k[1]
             if self.Time[pos]>10000:
+                count=count+1
+                if count>4:
+                    peak=-1
+                    trough=-1
+                    foundPeak=False
+                    FoundinitTrough=False
+                    initTrough=-1
+                    count=0
+                    
                 if FoundinitTrough==False:
                     #print 'looking for init trough'
                     if self.isTrough(pos,name,peak,trough):
                         FoundinitTrough=True
                         initTrough=pos
                         peak=-1
+                        count=0
                         #print "Found Init Trough"
                 elif foundPeak==False:
                     #print "Looking for Peak"
                     if self.isPeak(pos,name,peak,trough):
                         foundPeak=True
                         peak=pos
+                        count=0
                     elif self.isTrough(pos,name,peak,trough):
                        initTrough=pos
                        peak=-1
+                       count=0
                 else:
                     if self.isTrough(pos,name,peak,trough):
                         foundPeak=False
                         #print 'Found Wave Form= ',initTrough,peak,pos
                         self.IndividualWF.append([initTrough,peak,pos])
-                        #print 'Add Waveform= ',len(self.IndividualWF),self.IndividualWF
+                        print 'Add Waveform= ',len(self.IndividualWF),self.IndividualWF
                         initTrough=pos
                         peak=-1;
+                        count=0
                         
         numWave=0
         lenWave=[]
@@ -373,28 +427,30 @@ class PPGWave(object):
         timeWave=0
         MaxTimeWave=0
         timePeak=0
+        sumTime=0
         
         for k in self.IndividualWF:
             numWave=numWave+1
             lenWave=k[2]-k[0]
             timeWave=self.Time[k[2]]-self.Time[k[0]]
+            sumTime=sumTime+timeWave
             if timeWave>MaxTimeWave:
                 MaxTimeWave=timeWave
             if lenWave>MaxlenWave:
                 MaxlenWave=lenWave
             timePeak=timePeak+self.Time[k[1]]-self.Time[k[0]]
             #print 'From ',self.Time[k[0]], ' to ',self.Time[k[2]]
-        if MaxlenWave!=0:
-            deltatime=MaxTimeWave/MaxlenWave
-
-        
-        MaxLen=MaxlenWave
+        MaxLen=MaxlenWave*2
+        if MaxlenWave>0 and numWave>0:
+            wTime=sumTime/numWave
+            deltatime=wTime/MaxLen
+            
         WaveA=np.zeros(MaxLen)
         WaveT=np.zeros(MaxLen)
         Count=np.zeros(MaxLen)
         self.AverageWave.resize((3,MaxLen))
         
-        for k in range(0,MaxLen):
+        for k in range(0,MaxlenWave):
             for i in range(0,3):
                 self.AverageWave[i][k]=0
         if numWave==0:
@@ -403,48 +459,129 @@ class PPGWave(object):
 
         timePeak=timePeak/numWave
         PeakTimePoint=int(timePeak/deltatime)
-        #print 'Peak Time Point= ',PeakTimePoint
+
+        for i in range(0, MaxLen):
+            self.AverageWave[0][i]=deltatime*i
         
+        tempTime1=np.zeros(PeakTimePoint)
+        for i in range(0, PeakTimePoint):
+            tempTime1[i]=deltatime*i
+
+        tempTime2=np.zeros(MaxLen-PeakTimePoint)
+        for i in range(PeakTimePoint,MaxLen):
+            tempTime2[i-PeakTimePoint]=deltatime*i
 
         for k in self.IndividualWF:
-            i=PeakTimePoint+1
             minValue=self.filtered_sig[k[0]]
             for j in range(k[0], k[2]):
                 if self.filtered_sig[j]<minValue:
                     minValue=self.filtered_sig[j]
             #print 'min Value', minValue
+            
+
+            tempT1=np.zeros(k[1]-k[0])
+            tempWave1=np.zeros(k[1]-k[0])
+            i=0
+            for j in range(k[0],k[1]):
+                tempT1[i]=self.Time[j]-self.Time[k[0]]
+                tempWave1[i]=self.filtered_sig[j]-minValue
+                i=i+1
+            print tempWave1
+            InterpWave1=np.interp(tempTime1, tempT1, tempWave1)
+#           tempWave1=signal.resample(tempWave, PeakTimePoint)
+            print InterpWave1
+            
+            tempT2=np.zeros(k[2]-k[1])
+            tempWave2=np.zeros(k[2]-k[1])
+            i=0
+            for j in range(k[1],k[2]):
+                tempT2[i]=self.Time[j]-self.Time[k[0]]
+                tempWave2[i]=self.filtered_sig[j]-minValue
+                i=i+1
+            print tempWave2
+            InterpWave2=np.interp(tempTime2, tempT2, tempWave2)
+#           tempWave1=signal.resample(tempWave, PeakTimePoint)
+            print InterpWave2
+
+            tempWave3=np.zeros(MaxLen)
+            for i in range(0,PeakTimePoint):
+                tempWave3[i]=InterpWave1[i]
+            for i in range(PeakTimePoint,MaxLen):
+                tempWave3[i]=InterpWave2[i-PeakTimePoint]
+
+            i=0
+            tempWave=np.zeros(k[2]-k[0])
+            tempTime=np.zeros(k[2]-k[0])
+            for j in range(k[0],k[2]):
+                tempTime[i]=self.Time[j]-self.Time[k[0]]
+                tempWave[i]=self.filtered_sig[j]-minValue
+                i=i+1
+
+            x1 = tempTime
+            y1 = tempWave
+            plt.scatter(x1, y1,label = "original", color= "red", marker= "*", s=10)
+            x2 = self.AverageWave[0]
+            y2 = tempWave3
+            plt.plot(x2, y2,label = "Sampled", color= "blue")
+            plt.xlabel('Time [ms]')
+            plt.ylabel('Pulse Waveform [Arb. Units]')
+            plt.legend(loc='lower right')
+            plt.title('PGP Sampling')
+            plt.show()
+
+
+
+        
+            for i in range(0, MaxLen):
+                self.AverageWave[1][i]=self.AverageWave[1][i]+tempWave3[i]
+                Count[i]=Count[i]+1
+               
+#            tempWave=np.zeros(k[2]-k[1])
+#            i=0
+#            for j in range(k[1],k[2]):
+#                tempWave[i]=self.filtered_sig[j]-minValue
+#                i=i+1
+#            print tempWave
+#            tempWave=signal.resample(tempWave, MaxLen-PeakTimePoint)
+#            print tempWave
+
+#            for i in range(PeakTimePoint+1,MaxLen):
+#                self.AverageWave[1][i]=self.AverageWave[1][i]+tempWave[i-PeakTimePoint]
+#                Count[i]=Count[i]+1
+                
+            
 
             self.AverageWave[1][PeakTimePoint]=self.AverageWave[1][PeakTimePoint]+self.filtered_sig[k[1]]-minValue
             Count[PeakTimePoint]=Count[PeakTimePoint]+1
             #print 'Accumulated Peak=',self.AverageWave[1][PeakTimePoint], 'Count=',Count[PeakTimePoint]
 
-            for j in range(k[1]+1, k[2]):
-                i=round((self.Time[j]-self.Time[k[0]])/deltatime)
-                if i==PeakTimePoint:
-                    i=PeakTimePoint+1
-                if i>=MaxLen:
-                    i=MaxLen-1
-                self.AverageWave[1][i]=self.AverageWave[1][i]+self.filtered_sig[j]-minValue
-                Count[i]=Count[i]+1
-                i=i+1
+#            for j in range(k[1]+1, k[2]):
+#                i=round((self.Time[j]-self.Time[k[0]])/deltatime)
+#                if i==PeakTimePoint:
+#                    i=PeakTimePoint+1
+#                if i>=MaxLen:
+#                    i=MaxLen-1
+#                self.AverageWave[1][i]=self.AverageWave[1][i]+self.filtered_sig[j]-minValue
+#                Count[i]=Count[i]+1
+#                i=i+1
                 
           
-        for k in self.IndividualWF:
-            i=0
-            for j in range(k[0], k[1]-1):
-                i=round((self.Time[j]-self.Time[k[0]])/deltatime)
-                #print 'Index= ',i
-                if i==PeakTimePoint:
-                    i=PeakTimePoint-1
-                if i>=MaxLen:
-                    i=MaxLen-1
-                self.AverageWave[1][i]=self.AverageWave[1][i]-minValue+self.filtered_sig[j]
-                Count[i]=Count[i]+1
+    #    for k in self.IndividualWF:
+    #        i=0
+    #        for j in range(k[0], k[1]-1):
+    #            i=round((self.Time[j]-self.Time[k[0]])/deltatime)
+    #            #print 'Index= ',i
+    #            if i==PeakTimePoint:
+    #                i=PeakTimePoint-1
+    #            if i>=MaxLen:
+     #               i=MaxLen-1
+     #           self.AverageWave[1][i]=self.AverageWave[1][i]-minValue+self.filtered_sig[j]
+      #          Count[i]=Count[i]+1
 
-                i=i+1
+      #          i=i+1
 
         for i in range(0,MaxLen):
-            self.AverageWave[0][i]=deltatime*i
+       #     self.AverageWave[0][i]=deltatime*i
             self.AverageWave[1][i]=self.AverageWave[1][i]/Count[i]
         self.AverageWave[2][0]=PeakTimePoint
         self.AverageWave[2][1]=MaxLen-1
@@ -460,6 +597,7 @@ class PPGWave(object):
         plt.xlabel('Time [ms]')
         plt.ylabel('Pulse Waveform [Arb. Units]')
         plt.legend(loc='lower right')
+        #plt.xlim(0,2000)
         plt.xlim([min(0,math.floor(self.minTime)),math.ceil(self.maxTime/100)*100])
         
 
@@ -470,6 +608,21 @@ class PPGWave(object):
         #print 'MinMax= ', self.minValue, self.maxValue
         plt.title('PGP Wave Raw')
         plt.show()
+
+    def PlotPPGWaveBoth(self):
+        x2 = self.Time
+        y2 = self.filtered_sig
+        plt.plot(x2, y2,label = "Pulse Wave Form filtered", color= "blue")
+        y1=np.zeros(self.length)
+        for i in range(0,self.length):
+            y1[i] = self.Data[i]-self.minValue
+        self.SetupPlotPPG(y1)
+#        plt.ylim([min(0,math.floor(self.minValue)),math.ceil(self.maxValue/10)*10])
+        #print 'MinMax= ', self.minValue, self.maxValue
+        plt.title('PGP Wave Raw and Filtered')
+        plt.show()
+
+
 
     def PlotPPGWaveFiltered(self):
         y1 = self.filtered_sig
