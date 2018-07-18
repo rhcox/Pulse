@@ -30,6 +30,7 @@ class PPGSeg(object):
         self.HalfTimeHigh=-1                        
         self.PulseWaveAmplitude=-1
         self.SystolicPhase=-1
+        self.SystolicPeak=-1
         self.DiastolicPhase=-1
         self.PulseWaveDuration=-1
         self.PulsePropogationTme=-1
@@ -49,25 +50,27 @@ class PPGSeg(object):
         self.AverageWaveForm=self.ppg.getAverageWF()
         self.PulseWaveSystolicPeakPos=int(self.AverageWaveForm[2][0])
         self.PulseWaveEndPos=int(self.AverageWaveForm[2][1])
+        self.StdDevPWD=self.AverageWaveForm[2][2]
+        self.StdDevPWA=self.AverageWaveForm[2][4]
         firstD=PPGfunc.derivative(self.AverageWaveForm[0],self.AverageWaveForm[1])
         secondD=PPGfunc.derivative(self.AverageWaveForm[0],firstD)
 
 
 
-        x1 = self.AverageWaveForm[0]
-        y1 = self.AverageWaveForm[1]
-        plt.plot(x1, y1,label = "pulse", color= "red")
-        x2 = self.AverageWaveForm[0]
-        y2 = firstD*10
-        plt.plot(x2, y2,label = "First Derivative", color= "blue")
-        x2 = self.AverageWaveForm[0]
-        y2 = secondD*100
-        plt.plot(x2, y2,label = "Second Derivative", color= "green")
-        plt.xlabel('Time [ms]')
-        plt.ylabel('Pulse Waveform [Arb. Units]')
-        plt.legend(loc='upper right')
-        plt.title('Pulse Derivatives')
-        plt.show()
+#        x1 = self.AverageWaveForm[0]
+#        y1 = self.AverageWaveForm[1]
+#        plt.plot(x1, y1,label = "pulse", color= "red")
+#        x2 = self.AverageWaveForm[0]
+#        y2 = firstD*10
+#        plt.plot(x2, y2,label = "First Derivative", color= "blue")
+#        x2 = self.AverageWaveForm[0]
+#        y2 = secondD*100
+#        plt.plot(x2, y2,label = "Second Derivative", color= "green")
+#        plt.xlabel('Time [ms]')
+#        plt.ylabel('Pulse Waveform [Arb. Units]')
+#        plt.legend(loc='upper right')
+#       plt.title('Pulse Derivatives')
+#        plt.show()
 
 
         self.HalfHeight=0.5*self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos]
@@ -91,7 +94,8 @@ class PPGSeg(object):
 
 
 
-        Inflections=PPGfunc.FindNotch(self.AverageWaveForm[0],self.AverageWaveForm[1],self.PulseWaveSystolicPeakPos,self.HalfHeightHiPos,firstD,secondD)
+        Inflections=PPGfunc.FindNotch(self.AverageWaveForm[0],self.AverageWaveForm[1],self.HalfHeightHiPos-(self.HalfHeightHiPos-self.PulseWaveSystolicPeakPos)/2,self.HalfHeightHiPos+(self.PulseWaveEndPos-self.HalfHeightHiPos)/2,firstD,secondD)
+        print (self.PulseWaveSystolicPeakPos-self.HalfHeightHiPos)/2,self.HalfHeightHiPos,(self.PulseWaveEndPos-self.HalfHeightHiPos)/2
         if(len(Inflections)>1):
             self.DiastolicPeakPos=Inflections.pop()
             self.DicroticNotchPos=Inflections.pop()
@@ -105,6 +109,7 @@ class PPGSeg(object):
                         
         self.PulseWaveAmplitude=self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos]
         self.SystolicPhase=self.RiseTime=self.AverageWaveForm[0][self.PulseWaveSystolicPeakPos]
+        self.SystolicPeak=self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos]
         self.DiastolicPhase=self.AverageWaveForm[0][self.PulseWaveEndPos]-self.AverageWaveForm[0][self.PulseWaveSystolicPeakPos]
         self.PulseWaveDuration=self.AverageWaveForm[0][self.PulseWaveEndPos]
         self.PulsePropogationTme=self.AverageWaveForm[0][self.DiastolicPeakPos]-self.AverageWaveForm[0][self.PulseWaveSystolicPeakPos]
@@ -114,11 +119,11 @@ class PPGSeg(object):
 
         self.PulseArea1=0
         for i in range(1,self.DicroticNotchPos):
-            self.PulseArea1=self.PulseArea1+abs((self.AverageWaveForm[1][i]-self.AverageWaveForm[1][i-1])*(self.AverageWaveForm[0][i]-self.AverageWaveForm[0][i-1]))
+            self.PulseArea1=self.PulseArea1+abs((self.AverageWaveForm[1][i]+self.AverageWaveForm[1][i-1])/2*(self.AverageWaveForm[0][i]-self.AverageWaveForm[0][i-1]))
 
         self.PulseArea2=0
         for i in range(self.DicroticNotchPos,self.PulseWaveEndPos):
-            self.PulseArea2=self.PulseArea2+abs((self.AverageWaveForm[1][i]-self.AverageWaveForm[1][i-1])*(self.AverageWaveForm[0][i]-self.AverageWaveForm[0][i-1]))
+            self.PulseArea2=self.PulseArea2+abs((self.AverageWaveForm[1][i]+self.AverageWaveForm[1][i-1])/2*(self.AverageWaveForm[0][i]-self.AverageWaveForm[0][i-1]))
         
         self.PulseArea=self.PulseArea1+self.PulseArea2
         self.InflectionPointAreaRatio=self.PulseArea2/self.PulseArea1
@@ -133,36 +138,50 @@ class PPGSeg(object):
         plt.xlabel('Time [ms]')
         plt.xlim([-int(self.PulseWaveDuration/50),self.PulseWaveDuration])
         plt.ylim([-int(self.PulseWaveAmplitude/5),self.PulseWaveAmplitude*1.25])
-        
+        plt.ylabel('Pulse Waveform [Arb. Units]')
+
         if self.DicroticNotchPos>0:
             text='Dicrotic Notch: '+str(int(self.DicroticNotchTime))+' ms'
             plt.annotate(text,
             xy=(self.AverageWaveForm[0][self.DicroticNotchPos], self.AverageWaveForm[1][self.DicroticNotchPos]),
-            xytext=(100, 50),textcoords='offset points', ha='right', va='bottom',
-            arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
+            xytext=(50, 20),textcoords='offset points', ha='left', va='bottom',
+            arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0',))
             
             plt.annotate('Diastolic Peak: '+str(int(self.AverageWaveForm[0][self.DiastolicPeakPos]))+' ms',
             xy=(self.AverageWaveForm[0][self.DiastolicPeakPos], self.AverageWaveForm[1][self.DiastolicPeakPos]),
-            xytext=(150, 10), textcoords='offset points', ha='right', va='bottom',arrowprops=dict(arrowstyle = '->',
+            xytext=(50, 0), textcoords='offset points', ha='left', va='bottom',arrowprops=dict(arrowstyle = '->',
             connectionstyle='arc3,rad=0'))
 
         text='PW= '+ str(int(self.PulseWidthTime))+' ms'
         start=self.HalfTimeLow+(self.HalfTimeHigh-self.HalfTimeLow)/2.0
+        startT=self.HalfTimeLow+(self.DicroticNotchTime-self.HalfTimeLow)/2.0
+        print 'pos=',self.HalfTimeLow,self.DicroticNotchPos,startT
         distance=(self.HalfTimeHigh-self.HalfTimeLow)/2.0
         plt.arrow(start, self.HalfHeight, -distance, 0, width=0.05,length_includes_head=True)
         plt.arrow(start, self.HalfHeight, distance, 0, width=0.05,length_includes_head=True)
-        plt.text(start,self.HalfHeight , text, ha='center', va='top')
+        plt.text(startT,self.HalfHeight , text, ha='center', va='top')
         
-        text='PWA= '+ str(int(self.PulseWaveAmplitude))
+        text='PWA= '+ str(int(self.PulseWaveAmplitude))+'$\pm$'+str(int(self.StdDevPWA))
         start=self.PulseWaveAmplitude/2.0
         distance=start
+        distance1=self.StdDevPWD
         plt.arrow(-2,start,  -2,-distance,width=0.05,length_includes_head=True)
         plt.arrow(-2,start,  -2, distance,width=0.05 ,length_includes_head=True)
         plt.text(start,self.HalfHeight , text, ha='right', va='center', rotation='vertical')
 
-        self.RiseTime
+        text='Pulse Wave Duration= '+ str(int(self.PulseWaveDuration))+'$\pm$'+str(int(self.StdDevPWD))+' ms'
+        start=self.PulseWaveDuration/2
+        distance=start
+        plt.arrow(start,-7,  -distance,0,width=0.05,length_includes_head=True)
+        plt.arrow(start,-7,  distance,0,width=0.05,length_includes_head=True)
+        plt.text(start,-8, text, ha='center', va='top')
 
-        text='Systolic=RT= '+ str(int(self.RiseTime))+' ms'
+        plt.arrow(start,-7,  -distance1,0,width=0.05,length_includes_head=True)
+        plt.arrow(start,-7,  distance1,0,width=0.05,length_includes_head=True)
+
+
+
+        text='Systolic= '+ str(int(self.RiseTime))+' ms'
         start=self.RiseTime/2
         distance=start
         plt.arrow(start,-2,  -distance,0,width=0.05,length_includes_head=True)
@@ -176,13 +195,17 @@ class PPGSeg(object):
         plt.arrow(start,-2,  -distance,0,width=0.05,length_includes_head=True)
         plt.arrow(start,-2,  distance,0,width=0.05,length_includes_head=True)
         plt.text(start,-2 , text, ha='center', va='top')
+        start1=self.SystolicPhase
+        distance1=self.StdDevPWA
+        plt.arrow(start1,self.SystolicPeak,  0,distance1,width=0.05,length_includes_head=True)
+        plt.arrow(start1,self.SystolicPeak,  0,-distance1,width=0.05,length_includes_head=True)
         
         text='PPT= '+ str(int(self.PulsePropogationTme))+' ms'
         start=self.RiseTime+self.PulsePropogationTme/2.0
         distance=self.PulsePropogationTme/2.0
         plt.arrow(start, self.PulseWaveAmplitude, -distance,0, width=0.05,length_includes_head=True)
         plt.arrow(start, self.PulseWaveAmplitude, distance, 0, width=0.05,length_includes_head=True)
-        plt.text(start,self.PulseWaveAmplitude , text, ha='center', va='top')
+        plt.text(start,self.PulseWaveAmplitude+1, text, ha='center', va='bottom')
 
         text='PIP= '+ str(int(self.PulseInflectionPointAmplitude))
         start=self.DicroticNotchValue/2.0
@@ -191,15 +214,20 @@ class PPGSeg(object):
         plt.arrow(self.DicroticNotchTime, start, 0, distance, width=0.05,length_includes_head=True)
  #       plt.text(start,self.PulseWaveAmplitude , text, ha='center', va='top')
         text='Pulse Area 1= '+ str(int(self.PulseArea1))
-        plt.text(self.DicroticNotchTime/1.5,self.DicroticNotchValue/3.0 , text, ha='center', va='top')
+        plt.text(self.DicroticNotchTime-(self.DicroticNotchTime-self.HalfTimeLow)/2,self.DicroticNotchValue/4.0 , text, ha='center', va='top')
+        print self.DicroticNotchTime-(self.DicroticNotchTime-self.HalfTimeLow)/2
         text='Pulse Area 2= '+ str(int(self.PulseArea2))
-        plt.text(self.DicroticNotchTime/3.0+self.DicroticNotchTime,self.DicroticNotchValue/3.0 , text, ha='center', va='top')
+        plt.text(self.DicroticNotchTime+(self.PulseWaveDuration-self.DicroticNotchTime)/2,self.DicroticNotchValue/4.0,text, ha='center', va='top')
+        print self.DicroticNotchTime,(self.HalfTimeHigh-self.DicroticNotchTime)/2,self.DicroticNotchTime+(self.HalfTimeHigh-self.DicroticNotchTime)/2
+        
+        text='Number Pulses= '+ str(int(self.AverageWaveForm[2][3]))
+        plt.text(self.PulseWaveDuration-5,self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos]+5 , text, ha='right', va='bottom')
 
         text='Reflection Index= '+ str(int(self.RelectionIndex))+'%'
-        plt.text(self.DicroticNotchTime/2+self.DicroticNotchTime,self.PulseWaveAmplitude*3.0/4.0 , text, ha='center', va='top')
-
+        plt.text(self.PulseWaveDuration-5,self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos] , text, ha='right', va='bottom')
+        
         text='IPA= '+str(round(self.InflectionPointAreaRatio,2))
-        plt.text(self.DicroticNotchTime/2.0+self.DicroticNotchTime,self.PulseWaveAmplitude*7.0/8.0 , text, ha='center', va='top')
+        plt.text(self.PulseWaveDuration-5,self.AverageWaveForm[1][self.PulseWaveSystolicPeakPos]-5 , text, ha='right', va='top')
 
 
         plt.title('Annoted Averge Wave Form')

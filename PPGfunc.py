@@ -4,6 +4,7 @@ from scipy import fft, arange
 import sys
 from scipy import signal
 #import scipy
+import math
 
 def getMax(data):
         max=data[0]
@@ -58,31 +59,38 @@ def FindNotch(xvector, yvector, start,end, firstD,secondD):
     
     slope=np.zeros(minLen)
     Notch=False
-    slope[0]=getSlope(xvector[start],xvector[start+1],yvector[start],yvector[start+1])
+    #slope[0]=getSlope(xvector[0],xvector[1],yvector[0],yvector[1])
     #print 'Slope 0= ',slope[0] 
-    for i in range(start+1,minLen-1):
-        slope[start-i]=getSlope(xvector[i],xvector[i+1],yvector[i],yvector[i+1])
+    for i in range(0,minLen-1):
+        slope[i]=getSlope(xvector[i],xvector[i+1],yvector[i],yvector[i+1])
         #print 'Slope ',i,'= ', slope[i]
+        
+    for i in range(start,end):
         if slope[i-1]<0 and slope[i]>0 and Notch==False:
             #print 'Trough= ', i
             Peaks.append(i-1)
             Notch=True
+            #print 'Notch Real'
         elif Notch==True:
             #print 'Looking for Peak'
             if slope[i-1]>0 and slope[i]<0:
+                #print 'Notch Real'
                 #print 'Peak=' , i
                 Peaks.append(i-1)
                 return Peaks
                 break
+            
     for i in range (start+1,end-1):
+        print 'Look for notch',i,secondD[i],secondD[i+1], firstD[i]
         if secondD[i]/secondD[i+1]<0:
-            print "Critical Value ",xvector[i]
-            print firstD[i],firstD[i+1]
-            print secondD[i],secondD[i+1]
-            Peaks.append(i-1)
-            Peaks.append(i+1)
-
-    return Peaks
+            #print "Critical Value ",xvector[i]
+            #print firstD[i],firstD[i+1]
+            #print secondD[i],secondD[i+1]
+            Peaks.append(i)
+            for j in range (i+1,end-1):
+                if abs(firstD[i]-firstD[j])>0.005:
+                    Peaks.append(j)
+                    return Peaks
     
 def inflection(xvector, yvector):
     Inflections=[]
@@ -125,17 +133,17 @@ def butter_bandpass(lowcut, highcut, fs, order):
         nyq = 0.5 * fs
         low = lowcut / nyq
         high = highcut / nyq
-        print 'order=',order
-        print 'lowcut=',lowcut
-        print 'highcut=',highcut
-        print 'fs=',fs
+        #print 'order=',order
+        #print 'lowcut=',lowcut
+        #print 'highcut=',highcut
+        #print 'fs=',fs
         b,a = signal.butter(order, [low, high],btype='band',output='ba')
         #sos = signal.butter(order/10, [low, high], analog=True,btype='band',output='sos')
-        print 'b,a=',b,a;
+        #print 'b,a=',b,a;
         return b,a
 
 def butter_bandpass_filter(data,b,a):
-        print 'b,a=',b,a;
+        #print 'b,a=',b,a;
         zi = signal.lfilter_zi(b, a)
         y1 = signal.lfilter(b, a, data,zi=zi*data[0])
         #y2 = signal.lfilter(b, a, y1, zi=zi*y1[0])
